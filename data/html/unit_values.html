@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valores da Unidade - Medidor de Combustão</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="config-device-container">
+        <div class="header">
+            <h1 class="config-device-title">Valores da Unidade</h1>
+            <a class="btn btn-voltar" href="/config_unidade">Voltar</a>
+        <div>
+            <div class="brand">
+                <div class="brand-main">
+                    <img src="https://infitech.com.br/images/logo.jpg" alt="Infitech - Automação" class="brand-logo">
+                    <h2 class="brand-company">Infitech - Automação</h2>
+                </div>
+                <div class="brand-program">Programa: <strong>MCT-01</strong></div>
+            </div>
+            <h1>Valores da Unidade</h1>
+        
+            <div>
+            <div class="config-card">
+                <h2>Parâmetros de Combustão</h2>
+                
+                <div class="config-readonly-item">
+                    <span class="config-readonly-label">Temperatura:</span>
+                    <span class="config-readonly-value">{{TEMPERATURE}}°C</span>
+                </div>
+                
+                <div class="config-readonly-item">
+                    <span class="config-readonly-label">Pressão:</span>
+                    <span class="config-readonly-value">{{PRESSURE}} bar</span>
+                </div>
+                
+                <div class="config-readonly-item">
+                    <span class="config-readonly-label">Fluxo de Combustível:</span>
+                    <span class="config-readonly-value">{{FUEL_FLOW}} L/h</span>
+                </div>
+                
+                <div class="config-readonly-item">
+                    <span class="config-readonly-label">Nível de O₂:</span>
+                    <span class="config-readonly-value">{{OXYGEN_LEVEL}}%</span>
+                </div>
+            </div>
+            
+            <!-- Card: Status do Sistema -->
+            <div class="config-card">
+                <h2>Status do Sistema</h2>
+                
+                <div class="config-readonly-item">
+                    <span class="config-readonly-label">Status Geral:</span>
+                    <span class="config-readonly-value">{{SYSTEM_STATUS}}</span>
+                </div>
+                
+                <div class="config-readonly-item">
+                    <span class="config-readonly-label">Tempo de Operação:</span>
+                    <span class="config-readonly-value">{{OPERATION_TIME}}</span>
+                </div>
+                
+                <div class="config-readonly-item">
+                    <span class="config-readonly-label">Alarmes Ativos:</span>
+                    <span class="config-readonly-value">{{ACTIVE_ALARMS}}</span>
+                </div>
+                
+                <div class="config-readonly-item">
+                    <span class="config-readonly-label">Última Manutenção:</span>
+                    <span class="config-readonly-value">{{LAST_MAINTENANCE}}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Gráfico de Tendências -->
+        <div class="config-container">
+            <div class="config-block">
+                <h3>Tendências (Últimas 24h)</h3>
+                
+                <div class="info-box">
+                    <h4>Resumo das Medições</h4>
+                    <ul>
+                        <li><strong>Temperatura Média:</strong> {{AVG_TEMPERATURE}}°C</li>
+                        <li><strong>Temperatura Máxima:</strong> {{MAX_TEMPERATURE}}°C</li>
+                        <li><strong>Temperatura Mínima:</strong> {{MIN_TEMPERATURE}}°C</li>
+                        <li><strong>Eficiência Média:</strong> {{AVG_EFFICIENCY}}%</li>
+                        <li><strong>Consumo Total:</strong> {{TOTAL_CONSUMPTION}} L</li>
+                    </ul>
+                </div>
+                
+                <div class="form-actions">
+                    <button class="btn-config btn-primary" onclick="location.reload()">Atualizar Valores</button>
+                    <button class="btn-config btn-warning" onclick="exportData()">Exportar Dados</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Configurações de Monitoramento -->
+        <div class="config-container">
+            <div class="config-block">
+                <h3>Configurações de Monitoramento</h3>
+                
+                <form class="config-form" action="/unit_values_save" method="post">
+                    <div class="form-group">
+                        <label>Intervalo de Coleta (segundos):</label>
+                        <input type="number" name="collection_interval" value="{{COLLECTION_INTERVAL}}" min="1" max="3600" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Temperatura de Alarme (°C):</label>
+                        <input type="number" name="alarm_temperature" value="{{ALARM_TEMPERATURE}}" min="0" max="1000" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Pressão de Alarme (bar):</label>
+                        <input type="number" name="alarm_pressure" value="{{ALARM_PRESSURE}}" min="0" max="100" step="0.1" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Nível Mínimo de O₂ (%):</label>
+                        <input type="number" name="min_oxygen" value="{{MIN_OXYGEN}}" min="0" max="25" step="0.1" required>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button class="btn-config btn-success" type="submit">Salvar Configurações</button>
+                        <button class="btn-config btn-secondary" type="reset">Restaurar Valores</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/js/scripts.js"></script>
+    <script>
+        // Função para exportar dados
+        function exportData() {
+            showToast('Preparando exportação de dados...', 'info');
+            
+            // Simulação de exportação - implementar conforme necessário
+            setTimeout(() => {
+                const data = {
+                    timestamp: new Date().toISOString(),
+                    temperature: '{{TEMPERATURE}}',
+                    pressure: '{{PRESSURE}}',
+                    fuel_flow: '{{FUEL_FLOW}}',
+                    oxygen_level: '{{OXYGEN_LEVEL}}',
+                    system_status: '{{SYSTEM_STATUS}}'
+                };
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `medicao_combustao_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                
+                URL.revokeObjectURL(url);
+                showToast('Dados exportados com sucesso!', 'success');
+            }, 1000);
+        }
+        
+        // Auto-atualização a cada 30 segundos
+        setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                location.reload();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

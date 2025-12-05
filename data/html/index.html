@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Medidor de Combustão</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="brand">
+            <div class="brand-main">
+                <img src="https://infitech.com.br/images/logo.jpg" alt="Infitech - Automação" class="brand-logo">
+                <h2 class="brand-company">Infitech - Automação</h2>
+            </div>
+        </div>
+
+        <h1>Login</h1>
+        
+        <form id="login-form" action="/do_login" method="post">
+            <label>Usuário:</label>
+            <input type="text" name="user" placeholder="Digite seu usuário" required>
+            
+            <label>Senha:</label>
+            <input type="password" name="pass" placeholder="Digite sua senha" required>
+            
+            <div>
+                <button type="button" id="login-btn">Entrar</button>
+            </div>
+        </form>
+    </div>
+    
+    <script src="/js/scripts.js"></script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seleção Wi-Fi - Medidor de Combustão</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="brand">
+        <div class="brand-main">
+            <img src="https://infitech.com.br/images/logo.jpg" alt="Infitech - Automação" class="brand-logo">
+            <h2 class="brand-company">Infitech - Automação</h2>
+        </div>
+        <div class="brand-program">Programa: <strong>MCT-01</strong></div>
+    </div>
+
+    <div class="config-card" style="margin-top: 10px; padding: 15px;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+            <h1 style="margin:0;">Seleção de Rede Wi-Fi</h1>
+            <a class="btn-config btn-secondary" href="/wifi">Voltar</a>
+        </div>
+
+        <form action="/wifi_save" method="post" style="margin-top: 12px;">
+            <ul id="wifi-networks" class="info-list" style="margin-bottom: 12px;">
+                {{WIFI_LIST}}
+            </ul>
+
+            <div class="info-grid" style="margin-bottom: 12px;">
+                <div class="info-item">
+                    <label class="info-label" for="ssid_input">SSID:</label>
+                    <input class="config-input" type="text" name="ssid" id="ssid_input" value="{{SELECTED_SSID}}" required>
+                </div>
+                <div class="info-item">
+                    <label class="info-label" for="password_input">Senha:</label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input class="config-input" type="password" name="password" id="password_input" required>
+                        <button type="button" id="password_input_toggle" class="btn-config btn-tertiary" onclick="togglePasswordVisibility('password_input','password_input_toggle')">Mostrar</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:8px;">
+                <button class="btn-config btn-primary" type="submit">Conectar à Rede Selecionada</button>
+                <a class="btn-config btn-secondary" href="/wifi_scan">Escanear Redes</a>
+                <a class="btn-config btn-secondary" href="/wifi">Configuração Manual</a>
+            </div>
+        </form>
+    </div>
+
+    <script src="/js/wifi_selection.js"></script>
+    <script src="/js/scripts.js"></script>
+</body>
+</html>

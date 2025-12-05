@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informações do Sistema - Medidor de Combustão</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <!-- Cabeçalho Turquesa -->
+    <div class="header-bar">
+        <img src="https://infitech.com.br/images/logo.jpg" alt="Infitech" class="header-logo">
+        <div class="header-title">
+            <h1>Medidor de Combustão</h1>
+            <p>Modelo MCT-1</p>
+        </div>
+    </div>
+
+    <!-- Container Principal: Sidebar + Conteúdo -->
+    <div class="main-container">
+        <!-- Menu Lateral Amarelo -->
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <ul class="sidebar-menu">
+                    <li><a href="/admin">Gerenciamento de Configurações</a></li>
+                    <li><a href="/config_unidade">Configuração de Dispositivo</a></li>
+                    <li><a href="/mqtt_config">Configuração MQTT/TLS</a></li>
+                    <li><a href="/info" class="active">Informações do Dispositivo</a></li>
+                    <li><a href="/logout">Logout</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Área de Conteúdo -->
+        <div class="content-area">
+            <h2 class="page-title">Basic Status</h2>
+
+            <!-- Card: Informações do ESP32 -->
+            <div class="info-card">
+                <h2>Informações do ESP32</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Modelo do Chip:</span>
+                    <span class="info-value">{{CHIP_MODEL}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Revisão do Chip:</span>
+                    <span class="info-value">{{CHIP_REVISION}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Número de Cores:</span>
+                    <span class="info-value">{{CHIP_CORES}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Frequência da CPU:</span>
+                    <span class="info-value">{{CPU_FREQUENCY}} MHz</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Memória RAM Total:</span>
+                    <span class="info-value">{{TOTAL_RAM}} KB</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Memória RAM Livre:</span>
+                    <span class="info-value">{{FREE_RAM}} KB</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Flash Size:</span>
+                    <span class="info-value">{{FLASH_SIZE}} MB</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Endereço MAC:</span>
+                    <span class="info-value">{{MAC_ADDRESS}}</span>
+                </div>
+            </div>
+            </div>
+
+            <!-- Card: Informações do Programa -->
+            <div class="info-card">
+                <h2>Informações do Programa</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Nome do Projeto:</span>
+                    <span class="info-value">{{PROJECT_NAME}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Versão do Programa:</span>
+                    <span class="info-value">{{PROGRAM_VERSION}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Data de Compilação:</span>
+                    <span class="info-value">{{COMPILE_DATE}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Hora de Compilação:</span>
+                    <span class="info-value">{{COMPILE_TIME}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Versão do ESP-IDF:</span>
+                    <span class="info-value">{{IDF_VERSION}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Tempo de Funcionamento:</span>
+                    <span class="info-value">{{UPTIME}}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Configurações de Rede AP -->
+        <div class="config-card">
+            <h2>Configurações do Access Point</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Nome da Rede (SSID):</span>
+                    <span class="info-value">{{AP_SSID}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Senha:</span>
+                    <span class="info-value">{{AP_PASSWORD}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Endereço IP:</span>
+                    <span class="info-value">{{AP_IP}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Canal:</span>
+                    <span class="info-value">{{AP_CHANNEL}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Máximo de Conexões:</span>
+                    <span class="info-value">{{AP_MAX_CONNECTIONS}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Status:</span>
+                    <span class="info-value">{{AP_STATUS}}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Configurações de Rede WiFi -->
+        <div class="config-card">
+            <h2>Configurações do WiFi Cliente</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Rede Conectada (SSID):</span>
+                    <span class="info-value">{{WIFI_SSID}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Senha Configurada:</span>
+                    <span class="info-value">
+                        <span id="wifi_password_display">{{WIFI_PASSWORD_DISPLAY}}</span>
+                        <button type="button" id="wifi_password_toggle" class="password-toggle-btn" aria-label="Mostrar/ocultar senha"></button>
+                        <span id="wifi_password_plain" style="display:none">{{WIFI_PASSWORD_PLAIN}}</span>
+                    </span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Endereço IP:</span>
+                    <span class="info-value">{{WIFI_IP}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Máscara de Rede:</span>
+                    <span class="info-value">{{WIFI_NETMASK}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Gateway:</span>
+                    <span class="info-value">{{WIFI_GATEWAY}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Status da Conexão:</span>
+                    <span class="info-value">{{WIFI_STATUS}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Intensidade do Sinal:</span>
+                    <span class="info-value">{{WIFI_RSSI}} dBm</span>
+                </div>
+            </div>
+        </div>
+
+            <!-- Botões de Ação -->
+            <div style="text-align: center; margin-top: 30px;">
+                <button type="button" onclick="location.reload()">Atualizar Informações</button>
+                <button type="button" onclick="location.href='/admin'" style="background: #999;">Voltar para Admin</button>
+            </div>
+        </div>
+        <!-- Fim content-area -->
+    </div>
+    <!-- Fim main-container -->
+</body>
+<script>
+    (function() {
+        const toggleBtn = document.getElementById('wifi_password_toggle');
+        const display = document.getElementById('wifi_password_display');
+    // senha plain está presente em um elemento oculto no DOM
+    const plainEl = document.getElementById('wifi_password_plain');
+    const plain = plainEl ? plainEl.textContent.trim() : '';
+        let showing = false;
+
+        if (!toggleBtn || !display) return;
+
+        toggleBtn.addEventListener('click', function() {
+            if (!showing) {
+                // mostrar senha real, se disponível
+                if (plain && plain.length > 0) {
+                    display.textContent = plain;
+                } else {
+                    display.textContent = '(sem senha)';
+                }
+                toggleBtn.textContent = '';
+                showing = true;
+            } else {
+                // voltar a máscara
+                display.textContent = '{{WIFI_PASSWORD_DISPLAY}}';
+                toggleBtn.textContent = '';
+                showing = false;
+            }
+        });
+    })();
+</script>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuração Wi-Fi - Medidor de Combustão</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="config-device-container">
+        <div class="header">
+            <h1 class="config-device-title">Configuração Wi-Fi</h1>
+            <a class="btn btn-voltar" href="/config_unidade">Voltar</a>
+        <div>
+            <div class="brand">
+                <div class="brand-main">
+                    <img src="https://infitech.com.br/images/logo.jpg" alt="Infitech - Automação" class="brand-logo">
+                    <h2 class="brand-company">Infitech - Automação</h2>
+                </div>
+                <div class="brand-program">Programa: <strong>MCT-01</strong></div>
+            </div>
+            <h1>WiFi</h1>
+        
+            <div>
+            <div class="config-card">
+                <h2>Status da Conexão</h2>
+                
+                <div id="wifi-status" class="config-readonly-item">
+                    <span class="config-readonly-label">Status:</span>
+                    <span class="config-readonly-value">{{WIFI_STATUS}}</span>
+                </div>
+                
+                <div class="config-readonly-item">
+                    <span class="config-readonly-label">SSID Atual:</span>
+                    <span class="config-readonly-value">{{CURRENT_SSID}}</span>
+                </div>
+                
+                <div class="config-readonly-item">
+                    <span class="config-readonly-label">Endereço IP:</span>
+                    <span class="config-readonly-value">{{CURRENT_IP}}</span>
+                </div>
+                
+                <div class="config-readonly-item">
+                    <span class="config-readonly-label">Intensidade do Sinal:</span>
+                    <span class="config-readonly-value">{{SIGNAL_STRENGTH}} dBm</span>
+                </div>
+                
+                <div class="form-actions">
+                    <button class="btn-config btn-primary" onclick="location.reload()">Atualizar Status</button>
+                </div>
+            </div>
+            
+            <!-- Card: Configuração Manual -->
+            <div class="config-card">
+                <h2>Conectar à Rede Wi-Fi</h2>
+                
+                <form class="config-form" action="/wifi_save_nvs" method="post">
+                    <div class="config-form-group">
+                        <label class="config-label">Nome da Rede (SSID):</label>
+                        <input class="config-input" type="text" name="ssid" placeholder="Nome da rede Wi-Fi" required>
+                    </div>
+                    
+                    <div class="config-form-group">
+                        <label class="config-label">Senha:</label>
+                        <input class="config-input" type="password" name="password" placeholder="Senha da rede Wi-Fi">
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button class="btn-config btn-success" type="submit">Conectar</button>
+                        <button class="btn-config btn-warning" type="button" onclick="testWifiConnection(document.querySelector('input[name=ssid]').value, document.querySelector('input[name=password]').value)">Testar Conexão</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Seção: Redes Disponíveis -->
+        <div class="config-container">
+            <div class="config-block">
+                <h3>Redes Wi-Fi Disponíveis</h3>
+                
+                <div class="form-actions" style="margin-bottom: 20px;">
+                    <button class="btn-config btn-primary" id="scan-wifi-btn">Escanear Redes</button>
+                    <a class="btn-config btn-secondary" href="/wifi_select">Modo de Seleção</a>
+                </div>
+                
+                <div id="wifi-networks-list" class="wifi-networks">
+                    <p style="text-align: center; color: #7f8c8d; padding: 20px;">
+                        Clique em "Escanear Redes" para ver as redes Wi-Fi disponíveis
+                    </p>
+                </div>
+                
+                <div class="info-box">
+                    <h4>Dicas para Conexão Wi-Fi</h4>
+                    <ul>
+                        <li>Certifique-se de que a rede Wi-Fi está funcionando corretamente</li>
+                        <li>Verifique se a senha está correta (diferencia maiúsculas/minúsculas)</li>
+                        <li>Redes com sinal fraco podem ter problemas de conexão</li>
+                        <li>Use "Testar Conexão" antes de salvar as configurações</li>
+                        <li>O dispositivo se reconectará automaticamente após reiniciar</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Seção: Controles Avançados -->
+        <div class="config-container">
+            <div class="config-block">
+                <h3>Controles Avançados</h3>
+                
+                <div class="form-actions">
+                    <button class="btn-config btn-warning" onclick="if(confirm('Reiniciar o Wi-Fi pode interromper a conexão atual. Continuar?')) { fetch('/wifi_restart', {method: 'POST'}).then(() => setTimeout(() => location.reload(), 3000)); }">
+                        Reiniciar Wi-Fi
+                    </button>
+                    
+                    <button class="btn-config btn-danger" onclick="if(confirm('Isso desconectará de todas as redes Wi-Fi salvas. Continuar?')) { /* Implementar reset Wi-Fi */ }">
+                        Limpar Configurações
+                    </button>
+                </div>
+                
+                <div class="warning-text">
+                    Use os controles avançados com cuidado. Podem interromper a conexão atual.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/js/scripts.js"></script>
+</body>
+</html>
