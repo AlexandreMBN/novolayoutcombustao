@@ -481,6 +481,59 @@ static char* replace_placeholder(const char *template, const char *placeholder, 
     return result;
 }
 
+// Versão otimizada para dois tokens: aloca uma única vez e copia/substitui num passe
+static char* replace_two_tokens(const char *input,
+                               const char *token1, const char *value1,
+                               const char *token2, const char *value2) {
+    if (!input) return NULL;
+    if (!token1) token1 = "";
+    if (!token2) token2 = "";
+    if (!value1) value1 = "";
+    if (!value2) value2 = "";
+
+    size_t len_in = strlen(input);
+    size_t len_t1 = strlen(token1);
+    size_t len_t2 = strlen(token2);
+    size_t len_v1 = strlen(value1);
+    size_t len_v2 = strlen(value2);
+
+    // Conta ocorrências para calcular tamanho final
+    size_t count1 = 0, count2 = 0;
+    const char *p = input;
+    while (len_t1 && (p = strstr(p, token1)) != NULL) {
+        count1++; p += len_t1;
+    }
+    p = input;
+    while (len_t2 && (p = strstr(p, token2)) != NULL) {
+        count2++; p += len_t2;
+    }
+
+    size_t final_len = len_in
+        + count1 * (len_v1 - len_t1)
+        + count2 * (len_v2 - len_t2);
+
+    char *out = malloc(final_len + 1);
+    if (!out) return NULL;
+
+    const char *src = input;
+    char *dst = out;
+    while (*src) {
+        if (len_t1 && strncmp(src, token1, len_t1) == 0) {
+            memcpy(dst, value1, len_v1);
+            dst += len_v1;
+            src += len_t1;
+        } else if (len_t2 && strncmp(src, token2, len_t2) == 0) {
+            memcpy(dst, value2, len_v2);
+            dst += len_v2;
+            src += len_t2;
+        } else {
+            *dst++ = *src++;
+        }
+    }
+    *dst = '\0';
+    return out;
+}
+
 /**
  * Aplica múltiplas substituições de template
  * @param template Template original
@@ -496,6 +549,13 @@ static char* apply_template_substitutions(const char *template, const char **sub
 
     // Aplica cada substituição
     for (int i = 0; substitutions[i] != NULL && substitutions[i+1] != NULL; i += 2) {
+        // Evita alocar se o placeholder não estiver presente
+        char search_pattern[64];
+        snprintf(search_pattern, sizeof(search_pattern), "{{%s}}", substitutions[i]);
+        if (strstr(current, search_pattern) == NULL) {
+            continue;
+        }
+
         char *new_template = replace_placeholder(current, substitutions[i], substitutions[i+1]);
         if (new_template) {
             free(current);
@@ -821,20 +881,24 @@ esp_err_t admin_get_handler(httpd_req_t *req) {
     const char *show_admin_content = "";      // Para administrador (root)
     const char *hide_basic_content = "style='display:none;'";
     const char *hide_admin_content = "style='display:none;'";
+    const char *hide_mqtt_config = "";        // Para esconder MQTT/TLS em modo adm
+    const char *hide_esp32_info = "";         // Para esconder Informações do ESP32 em modo adm
     
     if (current_user_level == USER_LEVEL_ADMIN) {
         strcpy(user_level_str, "Administrador (root)");
         strcpy(user_permissions, "Acesso Completo");
         show_admin_content = "";
-    show_basic_content = hide_basic_content; // Admin não vê conteúdo básico
+        show_basic_content = hide_basic_content; // Admin não vê conteúdo básico
     } else if (current_user_level == USER_LEVEL_BASIC) {
-    strcpy(user_level_str, "Usuário Padrão (adm)");
+        strcpy(user_level_str, "Usuário Padrão (adm)");
         strcpy(user_permissions, "Acesso Limitado");
         show_basic_content = "";
-    show_admin_content = hide_admin_content; // Básico não vê conteúdo admin
+        show_admin_content = hide_admin_content; // Básico não vê conteúdo admin
+        hide_mqtt_config = "style='display:none;'"; // Esconde MQTT/TLS para usuário padrão
+        hide_esp32_info = "style='display:none;'"; // Esconde Informações do ESP32 para usuário padrão
     } else {
         strcpy(user_level_str, "Não identificado");
-    strcpy(user_permissions, "Sem permissões");
+        strcpy(user_permissions, "Sem permissões");
         show_basic_content = hide_basic_content;
         show_admin_content = hide_admin_content;
     }
@@ -846,6 +910,8 @@ esp_err_t admin_get_handler(httpd_req_t *req) {
         "USER_PERMISSIONS", user_permissions,
         "SHOW_BASIC_CONTENT", show_basic_content,
         "SHOW_ADMIN_CONTENT", show_admin_content,
+        "HIDE_MQTT_CONFIG", hide_mqtt_config,
+        "HIDE_ESP32_INFO", hide_esp32_info,
         
         // Registradores RTU (1000)
         "RTU_BAUDRATE", rtu_baudrate,
@@ -2326,6 +2392,17 @@ esp_err_t mqtt_config_get_handler(httpd_req_t *req) {
         return httpd_resp_send_404(req);
     }
     
+    // Calcular variáveis de visibilidade baseadas no nível de usuário
+    user_level_t current_user_level = load_user_level();
+    const char *hide_mqtt_config = "";
+    const char *hide_esp32_info = "";
+    if (current_user_level == USER_LEVEL_BASIC) {
+        // Usa atributo hidden (curto) para minimizar realocação na substituição
+        hide_mqtt_config = "hidden";
+        hide_esp32_info = "hidden";
+    }
+    ESP_LOGI(TAG, "config_unit user_level=%d hide_mqtt_config='%s'", current_user_level, hide_mqtt_config);
+    
     // Obter configuração atual do MQTT
     mqtt_config_t config;
     load_mqtt_config(&config);  // Carregar configuração do arquivo
@@ -2364,6 +2441,8 @@ esp_err_t mqtt_config_get_handler(httpd_req_t *req) {
     
     // Define substituições para o template
     const char *substitutions[] = {
+        "HIDE_MQTT_CONFIG", hide_mqtt_config,
+        "HIDE_ESP32_INFO", hide_esp32_info,
         "MQTT_ENABLED_CHECKED", enabled_checked,
         "MQTT_BROKER_URL", config.broker_url,
         "MQTT_PORT", port_str,
@@ -3279,57 +3358,81 @@ esp_err_t config_unit_get_handler(httpd_req_t *req) {
         return perm_result;
     }
 
+    // Carregar nível de usuário para determinar visibilidade de conteúdo
+    user_level_t current_user_level = load_user_level();
+    const char *hide_mqtt_config = "";
+    const char *hide_esp32_info = "";
+    if (current_user_level == USER_LEVEL_BASIC) {
+        hide_mqtt_config = "style='display:none;'";
+        hide_esp32_info = "style='display:none;'";
+    }
+
     ESP_LOGI(TAG, "Permission OK, free heap: %u bytes", (unsigned int)esp_get_free_heap_size());
     
-    // ESTRATÉGIA OTIMIZADA: Enviar HTML estático direto do arquivo sem substituições
-    // As páginas HTML modernas devem usar JavaScript para buscar dados via API
-    
     ensure_spiffs();
-    
-    FILE *file = fopen("/spiffs/html/config_device.html", "r");
-    if (!file) {
-        ESP_LOGE(TAG, "Failed to open config_device.html");
+
+    // Carregar template completo em memória
+    char *template_content = NULL;
+    esp_err_t ret = load_file_content("/spiffs/html/config_device.html", &template_content);
+    if (ret != ESP_OK || !template_content) {
+        ESP_LOGE(TAG, "Failed to load config_device.html");
         return httpd_resp_send_404(req);
     }
-    
-    // Obter tamanho do arquivo
-    fseek(file, 0, SEEK_END);
-    long file_size = ftell(file);
-    rewind(file);
-    
-    ESP_LOGI(TAG, "Sending config_device.html (%ld bytes) in chunks", file_size);
-    
+
     httpd_resp_set_type(req, "text/html");
-    
-    // Enviar arquivo em chunks de 2KB para economizar memória
-    #define CHUNK_SIZE 2048
-    char *chunk = malloc(CHUNK_SIZE);
-    if (!chunk) {
-        fclose(file);
-        ESP_LOGE(TAG, "Failed to allocate chunk buffer");
-        httpd_resp_send_500(req);
-        return ESP_ERR_NO_MEM;
-    }
-    
-    size_t bytes_read;
-    while ((bytes_read = fread(chunk, 1, CHUNK_SIZE, file)) > 0) {
-        if (httpd_resp_send_chunk(req, chunk, bytes_read) != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to send chunk");
-            free(chunk);
-            fclose(file);
-            return ESP_FAIL;
+
+    const size_t CHUNK_SIZE = 2048;
+    esp_err_t send_result = ESP_OK;
+    size_t total_len = strlen(template_content);
+    size_t offset = 0;
+    bool css_injected = false;
+
+    // Enviar arquivo em chunks e injetar CSS após </head> se usuário for básico
+    while (offset < total_len) {
+        // Procura por </head> na posição atual para injetar CSS
+        if (!css_injected && current_user_level == USER_LEVEL_BASIC) {
+            const char *head_end = strstr(template_content + offset, "</head>");
+            if (head_end && (size_t)(head_end - template_content) < offset + CHUNK_SIZE) {
+                // Enviar até </head>
+                size_t until_end = (size_t)(head_end - (template_content + offset)) + strlen("</head>");
+                if (httpd_resp_send_chunk(req, template_content + offset, until_end) != ESP_OK) {
+                    ESP_LOGE(TAG, "Failed to send until head");
+                    send_result = ESP_FAIL;
+                    break;
+                }
+                offset += until_end;
+
+                // Injetar CSS para ocultar MQTT
+                const char *css_hide = "<style>li a[href=\"/mqtt_config\"] {display:none !important;}</style>";
+                if (httpd_resp_send_chunk(req, css_hide, strlen(css_hide)) != ESP_OK) {
+                    ESP_LOGE(TAG, "Failed to send CSS hide");
+                    send_result = ESP_FAIL;
+                    break;
+                }
+                css_injected = true;
+                continue;
+            }
         }
+
+        // Enviar chunk normal
+        size_t remaining = total_len - offset;
+        size_t to_send = remaining < CHUNK_SIZE ? remaining : CHUNK_SIZE;
+        if (httpd_resp_send_chunk(req, template_content + offset, to_send) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to send chunk");
+            send_result = ESP_FAIL;
+            break;
+        }
+        offset += to_send;
     }
-    
-    // Finalizar resposta
+
+    // Finaliza resposta
     httpd_resp_send_chunk(req, NULL, 0);
-    
-    free(chunk);
-    fclose(file);
-    
-    ESP_LOGI(TAG, "File sent successfully, free heap: %u", (unsigned int)esp_get_free_heap_size());
-    
-    return ESP_OK;
+
+    free(template_content);
+
+    ESP_LOGI(TAG, "File sent successfully (no template replace), free heap: %u", (unsigned int)esp_get_free_heap_size());
+
+    return send_result;
 }
 
 // Handler para valores da unidade - usa template HTML
@@ -3469,6 +3572,15 @@ esp_err_t info_get_handler(httpd_req_t *req) {
     if (ret != ESP_OK || !template_content) {
         ESP_LOGE(TAG, "Failed to load info.html");
         return httpd_resp_send_404(req);
+    }
+
+    // Calcular variáveis de visibilidade baseadas no nível de usuário
+    user_level_t current_user_level = load_user_level();
+    const char *hide_mqtt_config = "";
+    const char *hide_esp32_info = "";
+    if (current_user_level == USER_LEVEL_BASIC) {
+        hide_mqtt_config = "style='display:none;'";
+        hide_esp32_info = "style='display:none;'";
     }
 
     // Coleta informações do ESP32
@@ -3614,6 +3726,10 @@ esp_err_t info_get_handler(httpd_req_t *req) {
 
     // Array de substituições
     const char *substitutions[] = {
+        // Variáveis de visibilidade
+        "HIDE_MQTT_CONFIG", hide_mqtt_config,
+        "HIDE_ESP32_INFO", hide_esp32_info,
+        
         // ESP32 Info
         "CHIP_MODEL", chip_model,
         "CHIP_REVISION", chip_revision,
@@ -3625,7 +3741,7 @@ esp_err_t info_get_handler(httpd_req_t *req) {
         "MAC_ADDRESS", mac_address,
         
         // Program Info
-    "PROJECT_NAME", "Medidor de Combustão ESP32",
+        "PROJECT_NAME", "Medidor de Combustão ESP32",
         "PROGRAM_VERSION", program_version,
         "COMPILE_DATE", compile_date,
         "COMPILE_TIME", compile_time,

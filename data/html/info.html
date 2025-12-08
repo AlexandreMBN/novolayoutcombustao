@@ -24,7 +24,7 @@
                 <ul class="sidebar-menu">
                     <li><a href="/admin">Gerenciamento de Configurações</a></li>
                     <li><a href="/config_unidade">Configuração de Dispositivo</a></li>
-                    <li><a href="/mqtt_config">Configuração MQTT/TLS</a></li>
+                    <li {{HIDE_MQTT_CONFIG}}><a href="/mqtt_config">Configuração MQTT/TLS</a></li>
                     <li><a href="/info" class="active">Informações do Dispositivo</a></li>
                     <li><a href="/logout">Logout</a></li>
                 </ul>
@@ -36,7 +36,7 @@
             <h2 class="page-title">Basic Status</h2>
 
             <!-- Card: Informações do ESP32 -->
-            <div class="info-card">
+            <div class="info-card" {{HIDE_ESP32_INFO}}>
                 <h2>Informações do ESP32</h2>
             <div class="info-grid">
                 <div class="info-item">
@@ -135,6 +135,44 @@
         <!-- Card: Configurações de Rede WiFi -->
         <div class="config-card">
             <h2>Configurações do WiFi Cliente</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Rede Conectada (SSID):</span>
+                    <span class="info-value">{{WIFI_SSID}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Senha Configurada:</span>
+                    <span class="info-value">
+                        <span id="wifi_password_display">{{WIFI_PASSWORD_DISPLAY}}</span>
+                        <button type="button" id="wifi_password_toggle" class="password-toggle-btn" aria-label="Mostrar/ocultar senha"></button>
+                        <span id="wifi_password_plain" style="display:none">{{WIFI_PASSWORD_PLAIN}}</span>
+                    </span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Endereço IP:</span>
+                    <span class="info-value">{{WIFI_IP}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Máscara de Rede:</span>
+                    <span class="info-value">{{WIFI_NETMASK}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Gateway:</span>
+                    <span class="info-value">{{WIFI_GATEWAY}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Status da Conexão:</span>
+                    <span class="info-value">{{WIFI_STATUS}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Intensidade do Sinal:</span>
+                    <span class="info-value">{{WIFI_RSSI}} dBm</span>
+                </div>
+            </div>
+        </div>
+         <!-- Card: Configurações da Ethernet -->
+        <div class="config-card">
+            <h2>Configurações da Ethernet</h2>
             <div class="info-grid">
                 <div class="info-item">
                     <span class="info-label">Rede Conectada (SSID):</span>
