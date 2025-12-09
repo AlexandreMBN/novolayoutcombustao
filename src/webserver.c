@@ -2448,7 +2448,8 @@ esp_err_t mqtt_config_get_handler(httpd_req_t *req) {
         "MQTT_PORT", port_str,
         "MQTT_CLIENT_ID", config.client_id,
         "MQTT_USERNAME", config.username,
-        "MQTT_PASSWORD", config.password,
+        /* For security, do not pre-fill the password field in GET responses */
+        "MQTT_PASSWORD", "",
         "MQTT_TLS_CHECKED", tls_checked,
         "MQTT_CA_PATH", config.ca_path,
         "MQTT_QOS", qos_str,
@@ -2638,45 +2639,69 @@ esp_err_t mqtt_test_api_handler(httpd_req_t *req) {
     cJSON *root = cJSON_Parse(buf);
     if (!root) {
         ESP_LOGE(TAG, "Failed to parse JSON for MQTT test");
-        
         cJSON *error_root = cJSON_CreateObject();
-        cJSON *success = cJSON_CreateBool(false);
-        cJSON *message = cJSON_CreateString("JSON inválido");
-        cJSON_AddItemToObject(error_root, "success", success);
-        cJSON_AddItemToObject(error_root, "message", message);
-        
+        cJSON_AddItemToObject(error_root, "success", cJSON_CreateBool(false));
+        cJSON_AddItemToObject(error_root, "message", cJSON_CreateString("JSON inválido"));
         char *error_json = cJSON_Print(error_root);
         cJSON_Delete(error_root);
-        
         httpd_resp_set_type(req, "application/json");
         httpd_resp_send(req, error_json, strlen(error_json));
         free(error_json);
         return ESP_OK;
     }
-    
-    // Por enquanto, simular teste (implementação completa requer modificações no mqtt_client_task)
-    bool test_success = true; // Placeholder
-    
+
+    // Monta configuração temporária a partir do JSON
+    mqtt_config_t temp_cfg;
+    memset(&temp_cfg, 0, sizeof(temp_cfg));
+
+    const cJSON *item = NULL;
+    item = cJSON_GetObjectItem(root, "broker_url"); if (cJSON_IsString(item) && item->valuestring) strncpy(temp_cfg.broker_url, item->valuestring, sizeof(temp_cfg.broker_url)-1);
+    item = cJSON_GetObjectItem(root, "port"); if (cJSON_IsNumber(item)) temp_cfg.port = (uint16_t)item->valueint; else temp_cfg.port = 1883;
+    item = cJSON_GetObjectItem(root, "client_id"); if (cJSON_IsString(item) && item->valuestring) strncpy(temp_cfg.client_id, item->valuestring, sizeof(temp_cfg.client_id)-1);
+    item = cJSON_GetObjectItem(root, "username"); if (cJSON_IsString(item) && item->valuestring) strncpy(temp_cfg.username, item->valuestring, sizeof(temp_cfg.username)-1);
+    item = cJSON_GetObjectItem(root, "password"); if (cJSON_IsString(item) && item->valuestring) strncpy(temp_cfg.password, item->valuestring, sizeof(temp_cfg.password)-1);
+    item = cJSON_GetObjectItem(root, "tls_enabled"); temp_cfg.tls_enabled = cJSON_IsTrue(item);
+    item = cJSON_GetObjectItem(root, "ca_path"); if (cJSON_IsString(item) && item->valuestring) strncpy(temp_cfg.ca_path, item->valuestring, sizeof(temp_cfg.ca_path)-1);
+    item = cJSON_GetObjectItem(root, "timeout_seconds"); int timeout_seconds = (cJSON_IsNumber(item)) ? item->valueint : 5;
+    item = cJSON_GetObjectItem(root, "test_topic"); const char *test_topic = (cJSON_IsString(item) && item->valuestring) ? item->valuestring : NULL;
+    item = cJSON_GetObjectItem(root, "test_message"); const char *test_message = (cJSON_IsString(item) && item->valuestring) ? item->valuestring : NULL;
+
+    // If no test_topic provided, default to publish all-data topic
+    if (!test_topic) test_topic = "esp32/sonda_lambda/data";
+
+    // Chama função de teste implementada no mqtt_client_task (conecta e publica se message provided)
+    bool success = false;
+    char *used_payload = NULL;
+    esp_err_t tret = mqtt_test_publish(&temp_cfg, test_topic, test_message, timeout_seconds * 1000, &success, &used_payload);
+
     cJSON *response = cJSON_CreateObject();
-    cJSON *success = cJSON_CreateBool(test_success);
-    cJSON *message = cJSON_CreateString(test_success ? "Teste de conexão simulado com sucesso" : "Falha no teste de conexão");
-    
-    cJSON_AddItemToObject(response, "success", success);
-    cJSON_AddItemToObject(response, "message", message);
-    
+    if (tret == ESP_OK && success) {
+        cJSON_AddItemToObject(response, "success", cJSON_CreateBool(true));
+        cJSON_AddItemToObject(response, "message", cJSON_CreateString("Conexão MQTT estabelecida e mensagem publicada com sucesso"));
+    } else if (tret == ESP_OK) {
+        cJSON_AddItemToObject(response, "success", cJSON_CreateBool(false));
+        cJSON_AddItemToObject(response, "message", cJSON_CreateString("Falha ao conectar ou publicar (timeout/erro)"));
+    } else {
+        cJSON_AddItemToObject(response, "success", cJSON_CreateBool(false));
+        cJSON_AddItemToObject(response, "message", cJSON_CreateString("Erro interno ao executar teste MQTT"));
+    }
+    if (used_payload) {
+        cJSON_AddItemToObject(response, "payload", cJSON_CreateString(used_payload));
+    }
+
     char *response_json = cJSON_Print(response);
     cJSON_Delete(response);
     cJSON_Delete(root);
-    
+    if (used_payload) free(used_payload);
+
     if (!response_json) {
         ESP_LOGE(TAG, "Failed to create test response JSON");
         return ESP_FAIL;
     }
-    
+
     httpd_resp_set_type(req, "application/json");
     esp_err_t result = httpd_resp_send(req, response_json, strlen(response_json));
     free(response_json);
-    
     return result;
 }
 
