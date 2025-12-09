@@ -569,3 +569,301 @@ esp_err_t mqtt_get_config(mqtt_config_t *config) {
     
     return ESP_ERR_TIMEOUT;
 }
+
+// Contexto usado pelo teste de conexão
+typedef struct {
+    SemaphoreHandle_t sem;
+    bool connected;
+    bool finished;
+} mqtt_test_ctx_t;
+
+// Event handler para o cliente de teste
+static void mqtt_test_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
+    mqtt_test_ctx_t *ctx = (mqtt_test_ctx_t*)handler_args;
+    if (!ctx) return;
+    switch ((esp_mqtt_event_id_t)event_id) {
+        case MQTT_EVENT_CONNECTED:
+            ctx->connected = true;
+            ctx->finished = true;
+            xSemaphoreGive(ctx->sem);
+            break;
+        case MQTT_EVENT_ERROR:
+        case MQTT_EVENT_DISCONNECTED:
+            ctx->finished = true;
+            xSemaphoreGive(ctx->sem);
+            break;
+        default:
+            break;
+    }
+}
+
+// Testa conexão MQTT usando um cliente temporário. Não altera o cliente principal.
+esp_err_t mqtt_test_connection(const mqtt_config_t *cfg, int timeout_ms, bool *out_success) {
+    if (!cfg || !out_success) return ESP_ERR_INVALID_ARG;
+    *out_success = false;
+
+    esp_mqtt_client_config_t mqtt_cfg = {0};
+    // Use pointers to strings in cfg (must remain valid while client exists)
+    mqtt_cfg.broker.address.uri = cfg->broker_url[0] ? cfg->broker_url : NULL;
+    mqtt_cfg.broker.address.port = cfg->port;
+    mqtt_cfg.credentials.client_id = cfg->client_id[0] ? cfg->client_id : NULL;
+    mqtt_cfg.session.keepalive = MQTT_KEEPALIVE;
+    mqtt_cfg.session.disable_clean_session = false;
+    mqtt_cfg.network.disable_auto_reconnect = false;
+    mqtt_cfg.network.reconnect_timeout_ms = 5000;
+    mqtt_cfg.network.timeout_ms = 10000;
+    mqtt_cfg.buffer.size = 1024;
+    mqtt_cfg.buffer.out_size = 1024;
+
+    char *ca_buf = NULL;
+    bool spiffs_mounted_local = false;
+    if (cfg->tls_enabled) {
+        if (cfg->ca_path[0] != '\0') {
+            esp_vfs_spiffs_conf_t conf = {
+                .base_path = "/spiffs",
+                .partition_label = NULL,
+                .max_files = 5,
+                .format_if_mount_failed = false
+            };
+            esp_err_t err = esp_vfs_spiffs_register(&conf);
+            if (err == ESP_OK) {
+                spiffs_mounted_local = true;
+                FILE *f = fopen(cfg->ca_path, "r");
+                if (f) {
+                    fseek(f, 0, SEEK_END);
+                    long len = ftell(f);
+                    fseek(f, 0, SEEK_SET);
+                    if (len > 0) {
+                        ca_buf = malloc(len + 1);
+                        if (ca_buf) {
+                            fread(ca_buf, 1, len, f);
+                            ca_buf[len] = '\0';
+                            mqtt_cfg.broker.verification.certificate = ca_buf;
+                            mqtt_cfg.broker.verification.certificate_len = 0;
+                            mqtt_cfg.broker.verification.use_global_ca_store = false;
+                        }
+                    }
+                    fclose(f);
+                }
+            }
+        }
+    }
+
+    if (strlen(cfg->username) > 0) mqtt_cfg.credentials.username = cfg->username;
+    if (strlen(cfg->password) > 0) mqtt_cfg.credentials.authentication.password = cfg->password;
+
+    esp_mqtt_client_handle_t test_client = esp_mqtt_client_init(&mqtt_cfg);
+    if (!test_client) {
+        if (ca_buf) free(ca_buf);
+        if (spiffs_mounted_local) esp_vfs_spiffs_unregister(NULL);
+        return ESP_ERR_NO_MEM;
+    }
+
+    mqtt_test_ctx_t *ctx = malloc(sizeof(mqtt_test_ctx_t));
+    if (!ctx) {
+        esp_mqtt_client_destroy(test_client);
+        if (ca_buf) free(ca_buf);
+        if (spiffs_mounted_local) esp_vfs_spiffs_unregister(NULL);
+        return ESP_ERR_NO_MEM;
+    }
+    ctx->sem = xSemaphoreCreateBinary();
+    ctx->connected = false;
+    ctx->finished = false;
+
+    esp_mqtt_client_register_event(test_client, ESP_EVENT_ANY_ID, mqtt_test_event_handler, ctx);
+
+    esp_err_t start_ret = esp_mqtt_client_start(test_client);
+    if (start_ret != ESP_OK) {
+        if (ctx->sem) vSemaphoreDelete(ctx->sem);
+        free(ctx);
+        esp_mqtt_client_destroy(test_client);
+        if (ca_buf) free(ca_buf);
+        if (spiffs_mounted_local) esp_vfs_spiffs_unregister(NULL);
+        return start_ret;
+    }
+
+    // Aguarda até timeout
+    TickType_t wait_ticks = pdMS_TO_TICKS((timeout_ms > 0) ? timeout_ms : 5000);
+    if (xSemaphoreTake(ctx->sem, wait_ticks) == pdTRUE) {
+        // received event
+        *out_success = ctx->connected;
+    } else {
+        // timeout
+        *out_success = false;
+    }
+
+    // Cleanup: parar e destruir cliente
+    esp_mqtt_client_stop(test_client);
+    esp_mqtt_client_destroy(test_client);
+
+    if (ctx->sem) vSemaphoreDelete(ctx->sem);
+    free(ctx);
+
+    if (ca_buf) free(ca_buf);
+    if (spiffs_mounted_local) esp_vfs_spiffs_unregister(NULL);
+
+    return ESP_OK;
+}
+
+// Testa conexão MQTT e publica uma mensagem no tópico fornecido.
+// Se message == NULL, a função retornará sucesso após conectar (sem publicar).
+esp_err_t mqtt_test_publish(const mqtt_config_t *cfg, const char *topic, const char *message, int timeout_ms, bool *out_success, char **out_payload) {
+    if (!cfg || !out_success || !topic) return ESP_ERR_INVALID_ARG;
+    if (out_payload) *out_payload = NULL;
+    *out_success = false;
+
+    esp_mqtt_client_config_t mqtt_cfg = {0};
+    mqtt_cfg.broker.address.uri = cfg->broker_url[0] ? cfg->broker_url : NULL;
+    mqtt_cfg.broker.address.port = cfg->port;
+    mqtt_cfg.credentials.client_id = cfg->client_id[0] ? cfg->client_id : NULL;
+    mqtt_cfg.session.keepalive = MQTT_KEEPALIVE;
+    mqtt_cfg.session.disable_clean_session = false;
+    mqtt_cfg.network.disable_auto_reconnect = false;
+    mqtt_cfg.network.reconnect_timeout_ms = 5000;
+    mqtt_cfg.network.timeout_ms = 10000;
+    mqtt_cfg.buffer.size = 1024;
+    mqtt_cfg.buffer.out_size = 1024;
+
+    char *ca_buf = NULL;
+    bool spiffs_mounted_local = false;
+    if (cfg->tls_enabled) {
+        if (cfg->ca_path[0] != '\0') {
+            esp_vfs_spiffs_conf_t conf = { .base_path = "/spiffs", .partition_label = NULL, .max_files = 5, .format_if_mount_failed = false };
+            esp_err_t err = esp_vfs_spiffs_register(&conf);
+            if (err == ESP_OK) {
+                spiffs_mounted_local = true;
+                FILE *f = fopen(cfg->ca_path, "r");
+                if (f) {
+                    fseek(f, 0, SEEK_END);
+                    long len = ftell(f);
+                    fseek(f, 0, SEEK_SET);
+                    if (len > 0) {
+                        ca_buf = malloc(len + 1);
+                        if (ca_buf) {
+                            fread(ca_buf, 1, len, f);
+                            ca_buf[len] = '\0';
+                            mqtt_cfg.broker.verification.certificate = ca_buf;
+                            mqtt_cfg.broker.verification.certificate_len = 0;
+                            mqtt_cfg.broker.verification.use_global_ca_store = false;
+                        }
+                    }
+                    fclose(f);
+                }
+            }
+        }
+    }
+
+    if (strlen(cfg->username) > 0) mqtt_cfg.credentials.username = cfg->username;
+    if (strlen(cfg->password) > 0) mqtt_cfg.credentials.authentication.password = cfg->password;
+
+    esp_mqtt_client_handle_t test_client = esp_mqtt_client_init(&mqtt_cfg);
+    if (!test_client) {
+        if (ca_buf) free(ca_buf);
+        if (spiffs_mounted_local) esp_vfs_spiffs_unregister(NULL);
+        return ESP_ERR_NO_MEM;
+    }
+
+    mqtt_test_ctx_t *ctx = malloc(sizeof(mqtt_test_ctx_t));
+    if (!ctx) {
+        esp_mqtt_client_destroy(test_client);
+        if (ca_buf) free(ca_buf);
+        if (spiffs_mounted_local) esp_vfs_spiffs_unregister(NULL);
+        return ESP_ERR_NO_MEM;
+    }
+    ctx->sem = xSemaphoreCreateBinary();
+    ctx->connected = false;
+    ctx->finished = false;
+
+    esp_mqtt_client_register_event(test_client, ESP_EVENT_ANY_ID, mqtt_test_event_handler, ctx);
+
+    esp_err_t start_ret = esp_mqtt_client_start(test_client);
+    if (start_ret != ESP_OK) {
+        if (ctx->sem) vSemaphoreDelete(ctx->sem);
+        free(ctx);
+        esp_mqtt_client_destroy(test_client);
+        if (ca_buf) free(ca_buf);
+        if (spiffs_mounted_local) esp_vfs_spiffs_unregister(NULL);
+        return start_ret;
+    }
+
+    TickType_t wait_ticks = pdMS_TO_TICKS((timeout_ms > 0) ? timeout_ms : 5000);
+    if (xSemaphoreTake(ctx->sem, wait_ticks) == pdTRUE) {
+        *out_success = ctx->connected;
+    } else {
+        *out_success = false;
+    }
+
+    // If connected and message provided (or to be generated), publish it
+    bool publish_ok = false;
+    char *generated = NULL;
+    const char *payload_to_send = message;
+    if (*out_success) {
+        if (!message || strlen(message) == 0) {
+            // Generate default payloads according to topic
+            if (strstr(topic, "/heat") != NULL) {
+                generated = strdup("123");
+            } else if (strstr(topic, "/lambda") != NULL) {
+                generated = strdup("456");
+            } else if (strstr(topic, "/o2") != NULL) {
+                generated = strdup("78");
+            } else if (strstr(topic, "/error") != NULL) {
+                generated = strdup("0");
+            } else if (strstr(topic, "/output") != NULL) {
+                generated = strdup("100");
+            } else if (strstr(topic, "/data") != NULL) {
+                // Create a JSON payload matching mqtt_publish_sonda_data structure
+                cJSON *j = cJSON_CreateObject();
+                if (j) {
+                    cJSON_AddNumberToObject(j, "heat", 123);
+                    cJSON_AddNumberToObject(j, "lambda", 456);
+                    cJSON_AddNumberToObject(j, "error", 0);
+                    cJSON_AddNumberToObject(j, "o2", 78);
+                    cJSON_AddNumberToObject(j, "output", 100);
+                    cJSON_AddNumberToObject(j, "timestamp", (double)(xTaskGetTickCount() * portTICK_PERIOD_MS));
+                    cJSON_AddStringToObject(j, "device_id", cfg->client_id);
+                    char *s = cJSON_PrintUnformatted(j);
+                    if (s) generated = strdup(s);
+                    if (s) free(s);
+                    cJSON_Delete(j);
+                }
+            } else {
+                generated = strdup("test");
+            }
+            if (generated) payload_to_send = generated;
+        }
+
+            if (payload_to_send && strlen(payload_to_send) > 0) {
+                int qos = cfg->qos;
+                int retain = cfg->retain ? 1 : 0;
+                int msg_id = esp_mqtt_client_publish(test_client, topic, payload_to_send, 0, qos, retain);
+                publish_ok = (msg_id != -1);
+                // small delay to let publish proceed
+                vTaskDelay(pdMS_TO_TICKS(200));
+            }
+    }
+
+    // Cleanup
+    esp_mqtt_client_stop(test_client);
+    esp_mqtt_client_destroy(test_client);
+
+    if (ctx->sem) vSemaphoreDelete(ctx->sem);
+    free(ctx);
+    if (ca_buf) free(ca_buf);
+    if (spiffs_mounted_local) esp_vfs_spiffs_unregister(NULL);
+
+    // If message was sent, success depends on publish result
+    if ((message && strlen(message) > 0) || generated) {
+        *out_success = publish_ok;
+    }
+
+    // Return the payload used (duplicate so caller can free)
+    if (out_payload) {
+        const char *used = payload_to_send;
+        if (!used) used = "";
+        *out_payload = strdup(used);
+    }
+
+    if (generated) free(generated);
+
+    return ESP_OK;
+}

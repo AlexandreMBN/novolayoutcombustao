@@ -68,4 +68,12 @@ esp_err_t mqtt_set_data_callback(mqtt_data_callback_t callback);
 // Função para enviar dados de outras tasks para o MQTT
 esp_err_t mqtt_send_data_to_queue(int16_t heat, int16_t lambda, int16_t error, uint16_t o2, uint32_t output);
 
+// Teste de conexão MQTT (cliente temporário)
+// Recebe uma configuração MQTT, timeout em ms e escreve em out_success
+// Retorna ESP_OK se a rotina executou corretamente (out_success indica sucesso da conexão)
+esp_err_t mqtt_test_connection(const mqtt_config_t *cfg, int timeout_ms, bool *out_success);
+// Testa conexão e publica uma mensagem de teste no tópico informado
+// mqtt_test_publish: publishes a test message and returns the payload used in out_payload (must be freed by caller)
+esp_err_t mqtt_test_publish(const mqtt_config_t *cfg, const char *topic, const char *message, int timeout_ms, bool *out_success, char **out_payload);
+
 #endif // MQTT_CLIENT_TASK_H
