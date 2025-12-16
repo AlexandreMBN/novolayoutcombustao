@@ -108,6 +108,9 @@
                 <label><input type="checkbox" id="mqtt_enabled" name="mqtt_enabled" {{MQTT_ENABLED_CHECKED}}> Habilitar MQTT</label>
             </div>
             <div class="config-form-group">
+                <label><input type="checkbox" id="mqtt_enabled" name="mqtt_enabled" {{MQTT_ENABLED_CHECKED}}> Habilitar MQTT</label>
+            </div>
+            <div class="config-form-group">
                 <label class="config-label">Porta:</label>
                 <input class="config-input" type="number" id="port" name="port" value="{{MQTT_PORT}}" min="1" max="65535">
                 <div class="port-auto">Padrão: 1883 (MQTT) | 8883 (MQTTS)</div>
@@ -170,6 +173,17 @@
             <div class="config-form-group">
                 <label class="config-label">Senha:</label>
                 <input class="config-input" type="password" id="password" name="password" value="{{MQTT_PASSWORD}}">
+            </div>
+            <div class="config-form-group">
+                <label class="config-label">Tópico de Teste:</label>
+                <select class="config-input" id="test_topic" name="test_topic">
+                    <option value="esp32/sonda_lambda/heat">esp32/sonda_lambda/heat</option>
+                    <option value="esp32/sonda_lambda/lambda">esp32/sonda_lambda/lambda</option>
+                    <option value="esp32/sonda_lambda/o2">esp32/sonda_lambda/o2</option>
+                    <option value="esp32/sonda_lambda/error">esp32/sonda_lambda/error</option>
+                    <option value="esp32/sonda_lambda/output">esp32/sonda_lambda/output</option>
+                    <option value="esp32/sonda_lambda/data" selected>esp32/sonda_lambda/data</option>
+                </select>
             </div>
         </details>
 
