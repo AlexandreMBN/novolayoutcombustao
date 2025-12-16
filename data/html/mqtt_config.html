@@ -108,6 +108,9 @@
                 <label><input type="checkbox" id="mqtt_enabled" name="mqtt_enabled" {{MQTT_ENABLED_CHECKED}}> Habilitar MQTT</label>
             </div>
             <div class="config-form-group">
+                <label><input type="checkbox" id="mqtt_enabled" name="mqtt_enabled" {{MQTT_ENABLED_CHECKED}}> Habilitar MQTT</label>
+            </div>
+            <div class="config-form-group">
                 <label class="config-label">Porta:</label>
                 <input class="config-input" type="number" id="port" name="port" value="{{MQTT_PORT}}" min="1" max="65535">
                 <div class="port-auto">Padrão: 1883 (MQTT) | 8883 (MQTTS)</div>
@@ -115,6 +118,18 @@
             <div class="config-form-group">
                 <label class="config-label">Client ID:</label>
                 <input class="config-input" id="client_id" name="client_id" value="{{MQTT_CLIENT_ID}}" placeholder="ESP32_SondaLambda">
+            </div>
+            <div class="config-form-group">
+                <label class="config-label">Topico de Teste:</label>
+                <select class="config-input" id="test_topic" name="test_topic">
+                    <option value="esp32/sonda_lambda/heat">esp32/sonda_lambda/heat</option>
+                    <option value="esp32/sonda_lambda/lambda">esp32/sonda_lambda/lambda</option>
+                    <option value="esp32/sonda_lambda/o2">esp32/sonda_lambda/o2</option>
+                    <option value="esp32/sonda_lambda/error">esp32/sonda_lambda/error</option>
+                    <option value="esp32/sonda_lambda/output">esp32/sonda_lambda/output</option>
+                    <option value="esp32/sonda_lambda/data" selected>esp32/sonda_lambda/data</option>
+                </select>
+                <small>Selecione o topico usado no teste de conexao.</small>
             </div>
         </details>
 
@@ -217,6 +232,50 @@
         const tlsSection = document.getElementById('tls-section');
         const certSelect = document.getElementById('ca_certificate');
         const certUploadSection = document.getElementById('cert-upload-section');
+        const testTopicSelect = document.getElementById('test_topic');
+
+        const topicPayloadBuilders = {
+            "esp32/sonda_lambda/heat": () => "123",
+            "esp32/sonda_lambda/lambda": () => "456",
+            "esp32/sonda_lambda/o2": () => "78",
+            "esp32/sonda_lambda/error": () => "0",
+            "esp32/sonda_lambda/output": () => "100",
+            "esp32/sonda_lambda/data": () => {
+                const clientId = document.getElementById('client_id').value || 'ESP32_SondaLambda';
+                const obj = {
+                    heat: 123,
+                    lambda: 456,
+                    error: 0,
+                    o2: 78,
+                    output: 100,
+                    timestamp: Date.now(),
+                    device_id: clientId
+                };
+                return JSON.stringify(obj);
+            }
+        };
+
+        function escapeHtml(str) {
+            return (str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+        }
+
+        function getPayloadForTopic(topic) {
+            const builder = topicPayloadBuilders[topic];
+            return builder ? builder() : 'test';
+        }
+
+        function appendLogLine(msg) {
+            const log = document.getElementById('test-log');
+            log.innerHTML += `<br>${msg}`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function logTopicSelection() {
+            if (!testTopicSelect) return;
+            const topic = testTopicSelect.value;
+            const payload = getPayloadForTopic(topic);
+            appendLogLine(`Topico selecionado: ${topic} | Payload de teste: <pre style="display:inline-block; background:#fff; padding:4px; border-radius:4px; margin:0">${escapeHtml(payload)}</pre>`);
+        }
 
         tlsCheckbox.addEventListener('change', () => {
             tlsSection.classList.toggle('hidden', !tlsCheckbox.checked);
@@ -226,44 +285,21 @@
             certUploadSection.classList.toggle('hidden', certSelect.value !== '/spiffs/custom_ca.pem');
         });
 
-        function setMqttStatusLabel(status, message) {
-            const statusEl = document.getElementById('mqtt-status');
-            statusEl.classList.remove('status-connected', 'status-disconnected', 'status-connecting');
-            if (status === 'connected') {
-                statusEl.classList.add('status-connected');
-                statusEl.textContent = 'Status: Conectado';
-            } else if (status === 'connecting') {
-                statusEl.classList.add('status-connecting');
-                statusEl.textContent = 'Status: Conectando...';
-            } else {
-                statusEl.classList.add('status-disconnected');
-                statusEl.textContent = 'Status: Desconectado';
-            }
-            if (message) statusEl.title = message;
+        if (testTopicSelect) {
+            testTopicSelect.addEventListener('change', logTopicSelection);
         }
-
-        async function refreshMqttStatus() {
-            try {
-                const resp = await fetch('/api/mqtt/status');
-                if (resp.ok) {
-                    const j = await resp.json();
-                    if (j && j.status) setMqttStatusLabel(j.status, j.message);
-                }
-            } catch (e) {
-                // ignore
-            }
-        }
-
-        // call once on load
-        window.addEventListener('load', () => {
-            refreshMqttStatus();
-            // also poll periodically
-            setInterval(refreshMqttStatus, 5000);
-        });
 
         async function testConnection() {
-            const log = document.getElementById('test-log');
-            log.innerHTML += "<br>Testando conexão com broker...";
+            appendLogLine('Testando conexão com broker...');
+
+            const selectedTopic = testTopicSelect ? testTopicSelect.value : null;
+            const selectedPayload = selectedTopic ? getPayloadForTopic(selectedTopic) : null;
+            if (selectedTopic) {
+                appendLogLine(`Topico de teste: ${selectedTopic}`);
+                if (selectedPayload) {
+                    appendLogLine(`Payload enviado: <pre style="display:inline-block; background:#fff; padding:4px; border-radius:4px; margin:0">${escapeHtml(selectedPayload)}</pre>`);
+                }
+            }
 
             const payload = {
                 broker_url: document.getElementById('broker_url').value || "",
@@ -273,8 +309,8 @@
                 password: document.getElementById('password').value || "",
                 tls_enabled: document.getElementById('tls_enabled').checked,
                 ca_path: document.getElementById('ca_certificate') ? document.getElementById('ca_certificate').value : "",
-                test_topic: document.getElementById('test_topic') ? document.getElementById('test_topic').value : null,
-                test_message: document.getElementById('test_message') ? document.getElementById('test_message').value : null,
+                test_topic: selectedTopic,
+                test_message: selectedPayload,
                 timeout_seconds: 8
             };
 
@@ -285,16 +321,11 @@
                     body: JSON.stringify(payload)
                 });
                 const j = await resp.json();
-                log.innerHTML += `<br>Resultado: ${j.success ? '<span style="color:green">Sucesso</span>' : '<span style="color:red">Falha</span>'} - ${j.message}`;
-                if (j.payload) log.innerHTML += `<br>Payload enviado: <pre style="background:#fff; padding:4px; border-radius:4px; display:inline-block">${j.payload}</pre>`;
-                // Do not change the global status bar based on a single test result.
-                // The global status is polled from the device every 5s and reflects the
-                // actual running MQTT client. Showing test results in the log only
-                // prevents the top bar from oscillating.
+                appendLogLine(`Resultado: ${j.success ? '<span style="color:green">Sucesso</span>' : '<span style="color:red">Falha</span>'} - ${j.message}`);
+                if (j.payload) appendLogLine(`Payload enviado pelo teste: <pre style="background:#fff; padding:4px; border-radius:4px; display:inline-block">${escapeHtml(j.payload)}</pre>`);
             } catch (e) {
-                log.innerHTML += `<br><span style="color:red">Erro na requisição: ${e.message}</span>`;
+                appendLogLine(`<span style="color:red">Erro na requisição: ${e.message}</span>`);
             }
-            log.scrollTop = log.scrollHeight;
         }
 
         async function saveConfig() {
@@ -330,6 +361,8 @@
                 alert('Erro na requisição: ' + e.message);
             }
         }
+
+        logTopicSelection();
     </script>
 </body>
 </html>
