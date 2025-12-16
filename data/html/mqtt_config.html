@@ -92,7 +92,7 @@
             <h2 class="page-title">Configuração MQTT</h2>
 
         <!-- Status -->
-        <div id="mqtt-status" class="mqtt-status status-disconnected">Status: Desconectado</div>
+        <div id="mqtt-status" class="mqtt-status status-connected">Status: Conectado</div>
 
         <!-- Configuração Básica -->
         <details class="config-card" style="cursor: pointer;">
@@ -229,6 +229,8 @@
         const certSelect = document.getElementById('ca_certificate');
         const certUploadSection = document.getElementById('cert-upload-section');
         const testTopicSelect = document.getElementById('test_topic');
+        const mqttEnabledCheckbox = document.getElementById('mqtt_enabled');
+        const mqttStatus = document.getElementById('mqtt-status');
 
         const topicPayloadBuilders = {
             "esp32/sonda_lambda/heat": () => "123",
@@ -273,6 +275,39 @@
             appendLogLine(`Topico selecionado: ${topic} | Payload de teste: <pre style="display:inline-block; background:#fff; padding:4px; border-radius:4px; margin:0">${escapeHtml(payload)}</pre>`);
         }
 
+        function applyMqttEnabledState() {
+            const enabled = mqttEnabledCheckbox ? mqttEnabledCheckbox.checked : true;
+            const idsToToggle = [
+                'broker_url','port','client_id','test_topic','tls_enabled','ca_certificate',
+                'username','password','qos','publish_interval','retain'
+            ];
+            idsToToggle.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = !enabled;
+            });
+
+            if (mqttStatus) {
+                mqttStatus.classList.remove('status-connected','status-connecting','status-disconnected');
+                if (enabled) {
+                    mqttStatus.classList.add('status-connected');
+                    mqttStatus.textContent = 'Status: Conectado';
+                } else {
+                    mqttStatus.classList.add('status-disconnected');
+                    mqttStatus.textContent = 'Status: MQTT desabilitado';
+                }
+            }
+
+            if (tlsSection) {
+                if (!enabled) {
+                    tlsSection.classList.add('hidden');
+                } else {
+                    tlsSection.classList.toggle('hidden', !tlsCheckbox.checked);
+                }
+            }
+
+            appendLogLine(enabled ? 'MQTT habilitado pela interface' : 'MQTT desabilitado pela interface');
+        }
+
         tlsCheckbox.addEventListener('change', () => {
             tlsSection.classList.toggle('hidden', !tlsCheckbox.checked);
         });
@@ -285,7 +320,15 @@
             testTopicSelect.addEventListener('change', logTopicSelection);
         }
 
+        if (mqttEnabledCheckbox) {
+            mqttEnabledCheckbox.addEventListener('change', applyMqttEnabledState);
+        }
+
         async function testConnection() {
+            if (mqttEnabledCheckbox && !mqttEnabledCheckbox.checked) {
+                appendLogLine('MQTT desabilitado: teste de conexão não será executado.');
+                return;
+            }
             appendLogLine('Testando conexão com broker...');
 
             const selectedTopic = testTopicSelect ? testTopicSelect.value : null;
@@ -359,6 +402,7 @@
         }
 
         logTopicSelection();
+        applyMqttEnabledState();
     </script>
 </body>
 </html>
