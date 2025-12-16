@@ -105,6 +105,9 @@
                 <small>Exemplo: mqtt://broker.hivemq.com ou mqtts://broker.exemplo.com</small>
             </div>
             <div class="config-form-group">
+                <label><input type="checkbox" id="mqtt_enabled" name="mqtt_enabled" {{MQTT_ENABLED_CHECKED}}> Habilitar MQTT</label>
+            </div>
+            <div class="config-form-group">
                 <label class="config-label">Porta:</label>
                 <input class="config-input" type="number" id="port" name="port" value="{{MQTT_PORT}}" min="1" max="65535">
                 <div class="port-auto">Padrão: 1883 (MQTT) | 8883 (MQTTS)</div>
@@ -112,6 +115,18 @@
             <div class="config-form-group">
                 <label class="config-label">Client ID:</label>
                 <input class="config-input" id="client_id" name="client_id" value="{{MQTT_CLIENT_ID}}" placeholder="ESP32_SondaLambda">
+            </div>
+            <div class="config-form-group">
+                <label class="config-label">Topico de Teste:</label>
+                <select class="config-input" id="test_topic" name="test_topic">
+                    <option value="esp32/sonda_lambda/heat">esp32/sonda_lambda/heat</option>
+                    <option value="esp32/sonda_lambda/lambda">esp32/sonda_lambda/lambda</option>
+                    <option value="esp32/sonda_lambda/o2">esp32/sonda_lambda/o2</option>
+                    <option value="esp32/sonda_lambda/error">esp32/sonda_lambda/error</option>
+                    <option value="esp32/sonda_lambda/output">esp32/sonda_lambda/output</option>
+                    <option value="esp32/sonda_lambda/data" selected>esp32/sonda_lambda/data</option>
+                </select>
+                <small>Selecione o topico usado no teste de conexao.</small>
             </div>
         </details>
 
@@ -203,6 +218,50 @@
         const tlsSection = document.getElementById('tls-section');
         const certSelect = document.getElementById('ca_certificate');
         const certUploadSection = document.getElementById('cert-upload-section');
+        const testTopicSelect = document.getElementById('test_topic');
+
+        const topicPayloadBuilders = {
+            "esp32/sonda_lambda/heat": () => "123",
+            "esp32/sonda_lambda/lambda": () => "456",
+            "esp32/sonda_lambda/o2": () => "78",
+            "esp32/sonda_lambda/error": () => "0",
+            "esp32/sonda_lambda/output": () => "100",
+            "esp32/sonda_lambda/data": () => {
+                const clientId = document.getElementById('client_id').value || 'ESP32_SondaLambda';
+                const obj = {
+                    heat: 123,
+                    lambda: 456,
+                    error: 0,
+                    o2: 78,
+                    output: 100,
+                    timestamp: Date.now(),
+                    device_id: clientId
+                };
+                return JSON.stringify(obj);
+            }
+        };
+
+        function escapeHtml(str) {
+            return (str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+        }
+
+        function getPayloadForTopic(topic) {
+            const builder = topicPayloadBuilders[topic];
+            return builder ? builder() : 'test';
+        }
+
+        function appendLogLine(msg) {
+            const log = document.getElementById('test-log');
+            log.innerHTML += `<br>${msg}`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function logTopicSelection() {
+            if (!testTopicSelect) return;
+            const topic = testTopicSelect.value;
+            const payload = getPayloadForTopic(topic);
+            appendLogLine(`Topico selecionado: ${topic} | Payload de teste: <pre style="display:inline-block; background:#fff; padding:4px; border-radius:4px; margin:0">${escapeHtml(payload)}</pre>`);
+        }
 
         tlsCheckbox.addEventListener('change', () => {
             tlsSection.classList.toggle('hidden', !tlsCheckbox.checked);
@@ -212,17 +271,84 @@
             certUploadSection.classList.toggle('hidden', certSelect.value !== '/spiffs/custom_ca.pem');
         });
 
-        function testConnection() {
-            const log = document.getElementById('test-log');
-            log.innerHTML += "<br>Testando conexão com broker...";
-            setTimeout(() => {
-                log.innerHTML += "<br>Conexão de teste simulada (implementar backend real).";
-            }, 2000);
+        if (testTopicSelect) {
+            testTopicSelect.addEventListener('change', logTopicSelection);
         }
 
-        function saveConfig() {
-            alert("Configuração salva com sucesso (simulado).");
+        async function testConnection() {
+            appendLogLine('Testando conexão com broker...');
+
+            const selectedTopic = testTopicSelect ? testTopicSelect.value : null;
+            const selectedPayload = selectedTopic ? getPayloadForTopic(selectedTopic) : null;
+            if (selectedTopic) {
+                appendLogLine(`Topico de teste: ${selectedTopic}`);
+                if (selectedPayload) {
+                    appendLogLine(`Payload enviado: <pre style="display:inline-block; background:#fff; padding:4px; border-radius:4px; margin:0">${escapeHtml(selectedPayload)}</pre>`);
+                }
+            }
+
+            const payload = {
+                broker_url: document.getElementById('broker_url').value || "",
+                port: parseInt(document.getElementById('port').value) || 1883,
+                client_id: document.getElementById('client_id').value || "",
+                username: document.getElementById('username').value || "",
+                password: document.getElementById('password').value || "",
+                tls_enabled: document.getElementById('tls_enabled').checked,
+                ca_path: document.getElementById('ca_certificate') ? document.getElementById('ca_certificate').value : "",
+                test_topic: selectedTopic,
+                test_message: selectedPayload,
+                timeout_seconds: 8
+            };
+
+            try {
+                const resp = await fetch('/api/mqtt/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const j = await resp.json();
+                appendLogLine(`Resultado: ${j.success ? '<span style="color:green">Sucesso</span>' : '<span style="color:red">Falha</span>'} - ${j.message}`);
+                if (j.payload) appendLogLine(`Payload enviado pelo teste: <pre style="background:#fff; padding:4px; border-radius:4px; display:inline-block">${escapeHtml(j.payload)}</pre>`);
+            } catch (e) {
+                appendLogLine(`<span style="color:red">Erro na requisição: ${e.message}</span>`);
+            }
         }
+
+        async function saveConfig() {
+            // Envia como application/x-www-form-urlencoded para o handler existente em /mqtt_config (POST)
+            const params = new URLSearchParams();
+            params.append('broker_url', document.getElementById('broker_url').value || '');
+            params.append('port', document.getElementById('port').value || '1883');
+            if (document.getElementById('mqtt_enabled') && document.getElementById('mqtt_enabled').checked) params.append('mqtt_enabled', 'on');
+            params.append('client_id', document.getElementById('client_id').value || '');
+            params.append('username', document.getElementById('username').value || '');
+            // Only send password if user filled it (leave unchanged on server if blank)
+            if (document.getElementById('password').value) params.append('password', document.getElementById('password').value);
+            if (document.getElementById('tls_enabled').checked) params.append('tls_enabled', 'on');
+            params.append('ca_certificate', document.getElementById('ca_certificate') ? document.getElementById('ca_certificate').value : '');
+            params.append('qos', document.getElementById('qos').value || '1');
+            params.append('publish_interval', document.getElementById('publish_interval').value || '1000');
+            if (document.getElementById('retain').checked) params.append('retain', 'on');
+
+            try {
+                const resp = await fetch('/mqtt_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params.toString()
+                });
+                if (resp.ok) {
+                    alert('Configuração salva com sucesso');
+                    // Limpa campo de senha por segurança
+                    document.getElementById('password').value = '';
+                } else {
+                    alert('Falha ao salvar configuração');
+                }
+            } catch (e) {
+                alert('Erro na requisição: ' + e.message);
+            }
+        }
+
+        logTopicSelection();
     </script>
 </body>
 </html>
