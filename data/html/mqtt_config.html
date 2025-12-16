@@ -108,9 +108,6 @@
                 <label><input type="checkbox" id="mqtt_enabled" name="mqtt_enabled" {{MQTT_ENABLED_CHECKED}}> Habilitar MQTT</label>
             </div>
             <div class="config-form-group">
-                <label><input type="checkbox" id="mqtt_enabled" name="mqtt_enabled" {{MQTT_ENABLED_CHECKED}}> Habilitar MQTT</label>
-            </div>
-            <div class="config-form-group">
                 <label class="config-label">Porta:</label>
                 <input class="config-input" type="number" id="port" name="port" value="{{MQTT_PORT}}" min="1" max="65535">
                 <div class="port-auto">Padrão: 1883 (MQTT) | 8883 (MQTTS)</div>
@@ -132,6 +129,14 @@
                 <small>Selecione o topico usado no teste de conexao.</small>
             </div>
         </details>
+
+        <!-- Log de Teste (movido para perto da config do broker) -->
+        <div class="config-card">
+            <h2>Log de Teste</h2>
+            <div id="test-log" style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:4px; padding:10px; height:150px; overflow-y:auto; font-family:monospace;">
+                Pronto para testar conexão...
+            </div>
+        </div>
 
         <!-- TLS -->
         <details class="config-card" style="cursor: pointer;">
@@ -211,17 +216,8 @@
 
         <!-- Botões -->
         <div class="config-card" style="text-align:center;">
-            <button class="test-connection" onclick="testConnection()">Testar Conexão</button>
             <button class="btn-config" onclick="saveConfig()">Salvar</button>
             <a class="btn-config btn-secondary" href="/admin">Cancelar</a>
-        </div>
-
-        <!-- Log -->
-        <div class="config-card">
-            <h2>Log de Teste</h2>
-            <div id="test-log" style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:4px; padding:10px; height:150px; overflow-y:auto; font-family:monospace;">
-                Pronto para testar conexão...
-            </div>
         </div>
         </div> <!-- /content-area -->
     </div> <!-- /main-container -->
